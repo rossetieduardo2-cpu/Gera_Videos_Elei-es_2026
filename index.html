@@ -114,6 +114,7 @@ code{font-size:12px}
  <div class="ctrl">
   <button id="play" class="pri">▶ Prévia</button>
   <button id="rec">● Gravar vídeo</button>
+  <label class="chk" style="display:inline-flex;margin-left:6px"><input type="checkbox" id="wa" checked> Converter para WhatsApp (MP4 H.264)</label>
   <select id="qual" style="width:auto" title="Qualidade do arquivo"><option value="1080,6">Alta · 1080×1920 (~45 MB/min)</option><option value="720,2.5" selected>Média · 720×1280 (~19 MB/min)</option><option value="540,1.2">Leve · 540×960 (~9 MB/min)</option></select>
   <div class="bar"><i id="prog"></i></div><span id="tempo">0,0 / 0,0 s</span>
  </div>
@@ -669,6 +670,19 @@ function loop(){const t=(performance.now()-t0p)/1000;tempoAtual=Math.min(t,durac
 async function toca(dest){await audioInit();await AC.resume();master.gain.value=1;agendaMusica(dest);tocando=true;t0p=performance.now()+50;$("play").textContent="■ Parar";raf=requestAnimationFrame(loop)}
 function para(){tocando=false;cancelAnimationFrame(raf);fontes.forEach(s=>{try{s.stop()}catch(e){}});$("play").textContent="▶ Prévia";if(rec&&rec.state==="recording")rec.stop()}
 $("play").onclick=()=>{$("s-prev").open=true;tocando?para():toca()};
+
+const FFV="https://cdn.jsdelivr.net/npm/@ffmpeg/";let FF=null;
+async function blobURL(u,t){const r=await fetch(u);return URL.createObjectURL(new Blob([await r.arrayBuffer()],{type:t}))}
+async function carregaFF(){if(FF)return FF;
+ if(!window.FFmpegWASM){await new Promise((ok,er)=>{const sc=document.createElement("script");sc.src=FFV+"ffmpeg@0.12.10/dist/umd/ffmpeg.js";sc.onload=ok;sc.onerror=er;document.head.appendChild(sc)})}
+ const f=new FFmpegWASM.FFmpeg();
+ await f.load({classWorkerURL:await blobURL(FFV+"ffmpeg@0.12.10/dist/umd/814.ffmpeg.js","text/javascript"),coreURL:await blobURL(FFV+"core@0.12.6/dist/esm/ffmpeg-core.js","text/javascript"),wasmURL:await blobURL(FFV+"core@0.12.6/dist/esm/ffmpeg-core.wasm","application/wasm")});
+ return FF=f}
+async function paraWhats(blob,ext,mbps){$("rec").textContent="Preparando conversor…";const f=await carregaFF();
+ f.on("progress",({progress})=>{$("rec").textContent="Convertendo para WhatsApp… "+Math.max(0,Math.min(100,Math.round(progress*100)))+"%"});
+ const inn="in."+ext;await f.writeFile(inn,new Uint8Array(await blob.arrayBuffer()));
+ await f.exec(["-i",inn,"-c:v","libx264","-preset","veryfast","-b:v",Math.round(mbps*1000)+"k","-maxrate",Math.round(mbps*1500)+"k","-bufsize",Math.round(mbps*2000)+"k","-pix_fmt","yuv420p","-profile:v","main","-r","30","-c:a","aac","-b:a","128k","-ar","44100","-movflags","+faststart","out.mp4"]);
+ const d=await f.readFile("out.mp4");await f.deleteFile(inn);await f.deleteFile("out.mp4");return new Blob([d.buffer],{type:"video/mp4"})}
 function mimeOK(){for(const m of["video/mp4;codecs=avc1.42E01E,mp4a.40.2","video/mp4","video/webm;codecs=vp9,opus","video/webm;codecs=vp8,opus","video/webm"])if(window.MediaRecorder&&MediaRecorder.isTypeSupported(m))return m;return null}
 $("fmt").textContent=mimeOK()?("Formato de gravação neste navegador: "+(mimeOK().includes("mp4")?"MP4":"WebM")):"Este navegador não grava vídeo; use Chrome, Edge ou Safari.";
 $("rec").onclick=async()=>{$("s-prev").open=true;
@@ -677,7 +691,9 @@ $("rec").onclick=async()=>{$("s-prev").open=true;
  if(qw<1080){src=document.createElement("canvas");src.width=qw;src.height=Math.round(qw*16/9);const sx=src.getContext("2d");sx.imageSmoothingQuality="high";const f=()=>{sx.drawImage(cv,0,0,src.width,src.height);cop=requestAnimationFrame(f)};f()}
  const st=src.captureStream(30);dest.stream.getAudioTracks().forEach(t=>st.addTrack(t));
  const chunks=[];rec=new MediaRecorder(st,{mimeType:mime,videoBitsPerSecond:qb*1e6});rec.ondataavailable=e=>e.data.size&&chunks.push(e.data);
- rec.onstop=()=>{cancelAnimationFrame(cop);master.gain.value=1;const ext=mime.includes("mp4")?"mp4":"webm";const b=new Blob(chunks,{type:mime.split(";")[0]});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=`${S.R.titulo.normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\W+/g,"_")}_${$("terr").value}_${S.v.corte}pct.${ext}`;a.click();$("rec").disabled=false;$("rec").textContent="● Gravar vídeo"};
+ rec.onstop=async()=>{cancelAnimationFrame(cop);master.gain.value=1;let ext=mime.includes("mp4")?"mp4":"webm";let b=new Blob(chunks,{type:mime.split(";")[0]});
+ if($("wa").checked){try{b=await paraWhats(b,ext,qb);ext="mp4"}catch(e){console.error(e);alert("Não foi possível converter para WhatsApp neste navegador; o arquivo original será baixado.")}}
+ const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=`${S.R.titulo.normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\W+/g,"_")}_${$("terr").value}_${S.v.corte}pct.${ext}`;a.click();$("rec").disabled=false;$("rec").textContent="● Gravar vídeo"};
  $("rec").disabled=true;$("rec").textContent="Gravando…";rec.start(500);toca(dest);
 };
 $("csv").onclick=()=>{const h="cd_ibge;municipio;uf;populacao;atendidos;atend_mil_hab;grupo_alto_uso;votos_flavio_26;votos_lula_26;votos_outros_26;validos_26;aptos_26;abstencao_26;votos_lula_22;votos_bolsonaro_22;votos_outros_22;validos_22";
