@@ -317,7 +317,7 @@ const pct=v=>nf(v,v<10?1:0)+"%", pct1=v=>nf(v,1)+"%";
 let S={};
 function territorio(v){
  if(v==="BR")return{lista:M,nome:"Brasil",em:"no Brasil",do:"do país"};
- if(v.startsWith("R"))return{lista:M.filter(m=>m.reg==+v.slice(1)),nome:REG[v.slice(1)],em:"no "+REG[v.slice(1)],do:"da região"};
+ if(/^R\d$/.test(v))return{lista:M.filter(m=>m.reg==+v.slice(1)),nome:REG[v.slice(1)],em:"no "+REG[v.slice(1)],do:"da região"};
  const n=UFN[v],pre={AC:"no",AP:"no",AM:"no",BA:"na",CE:"no",DF:"no",ES:"no",MA:"no",PA:"no",PB:"na",PR:"no",PI:"no",RJ:"no",RN:"no",RS:"no"}[v]||"em";return{lista:M.filter(m=>m.uf===v),nome:n,em:pre+" "+n,do:"do estado"};
 }
 /* ---------- variáveis: brutas, calculadas (fórmulas) e textos ---------- */
